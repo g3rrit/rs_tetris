@@ -1,10 +1,16 @@
 extern crate piston_window;
 extern crate graphics;
 
+use core::cell::RefCell;
 use piston_window::*;
 use graphics::Graphics;
 
-//--- CONSTANTS ---
+//---------------------------------------
+// CONSTANTS
+//---------------------------------------
+/* -- COLORS -- */
+const BACKGROUND_C: [f32; 4] = [0.5, 0.5, 0.5, 1.0];
+
 const WINDOW_WIDTH: u32 = 400;
 const WINDOW_HEIGHT: u32 = 400;
 const FIELD_WIDTH: u32 = 200;
@@ -12,44 +18,72 @@ const FIELD_HEIGHT: u32 = 400;
 const GRID_WIDTH: u32 = 10;
 const GRID_HEIGHT: u32 = 20;
 
+//---------------------------------------
+// WINDOW
+//---------------------------------------
 struct Window {
     width: u32,
     height: u32,
     pwindow: PistonWindow,
-    field: Field,
 }
 
 impl Window {
     fn new(_width: u32, _height: u32) -> Window {
+        let opengl = OpenGL::V3_2;
         Window {
             width: _width,
             height: _height,
             pwindow: WindowSettings::new("Tetris", (_width, _height))
                 .exit_on_esc(true)
+                .opengl(opengl)
                 .build()
                 .unwrap(),
-            field: Field::new(),
         }
     }
 
-    fn update(&mut self) {
-        while let Some(e) = self.pwindow.next() {
-            if let Some(_) = e.render_args() {
-                let cf = &self.field;
+    fn update(&mut self, ecs: &ECS) {
+        if let Some(e) = self.pwindow.next() {
+            if let Some(r_a) = e.render_args() {
                 self.pwindow.draw_2d(&e, |c, g| {
-                    clear([0.5, 0.5, 0.5, 1.0], g);
+                    clear(BACKGROUND_C, g);
 
-                    cf.draw(c.transform, g);
+                    ecs.draw(&c, &g);
                 });
+            }
+            if let Some(u_a) = e.update_args() {
+                ecs.update(u_a.dt);
             }
         }
     }
 
-    fn new_game(&mut self) {
-        
+}
+
+//---------------------------------------
+// ENTITY_COMPONENT_SYSTEM
+//---------------------------------------
+
+struct ECS {
+}
+
+impl ECS {
+
+    fn new() -> ECS {
+        ECS {
+            
+        }
+    }
+
+    fn draw(&self, c: &impl Transformed, g: &impl Graphics) {
+    }
+
+    fn update(&self, dt: f64) {
+        println!("updating ecs: {}", dt);
     }
 }
 
+//---------------------------------------
+// ENTITIES
+//---------------------------------------
 struct Field {
     x: u32,
     y: u32,
@@ -81,14 +115,14 @@ impl Field {
                                (self.y + y * GRID_WIDTH) as f64,
                                GRID_WIDTH as f64,
                                GRID_WIDTH as f64],
-                               t, g);
+                              t, g);
                 } else if self.grid[pos] == 0 {
                     rectangle([1.0, 0.0, 0.0, 1.0],
                               [(self.x + x * GRID_WIDTH) as f64,
                                (self.y + y * GRID_WIDTH) as f64,
                                GRID_WIDTH as f64,
                                GRID_WIDTH as f64],
-                               t, g);
+                              t, g);
                 }
             }
         }
@@ -99,7 +133,10 @@ fn main() {
     println!("starting tetris");
 
     let mut window = Window::new(WINDOW_WIDTH, WINDOW_HEIGHT);
-    window.new_game();
 
-    window.update();
+    let ecs = ECS::new();
+
+    loop {
+        window.update(&ecs);
+    }
 }
