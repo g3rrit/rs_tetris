@@ -18,6 +18,39 @@ const FIELD_HEIGHT: u32 = 400;
 const GRID_WIDTH: u32 = 10;
 const GRID_HEIGHT: u32 = 20;
 
+
+//---------------------------------------
+// UTIL
+//---------------------------------------
+
+struct Vec2 {
+    x: u32,
+    y: u32
+}
+
+impl Vec2 {
+    fn new(x: u32, y: u32) -> Vec2 {
+        Vec2 {
+            x: x,
+            y: y,
+        }
+    }
+}
+
+struct Rec {
+    pos: Vec2,
+    dim: Vec2,
+}
+
+impl Rec {
+    fn new(pos: Vec2, dim: Vec2) -> Rec {
+        Rec {
+            pos: pos,
+            dim: dim,
+        }
+    }
+}
+
 //---------------------------------------
 // WINDOW
 //---------------------------------------
@@ -25,33 +58,46 @@ struct Window {
     width: u32,
     height: u32,
     pwindow: PistonWindow,
+    glyphs: Glyphs,
 }
 
 impl Window {
     fn new(_width: u32, _height: u32) -> Window {
         let opengl = OpenGL::V3_2;
+
+        let window: PistonWindow = WindowSettings::new("Tetris", (_width, _height))
+            .exit_on_esc(true)
+            .opengl(opengl)
+            .build()
+            .unwrap();
+
+        let assets = find_folder::Search::ParentsThenKids(3, 3)
+            .for_folder("assets").unwrap();
+        println!("{:?}", assets);
+        let ref font = assets.join("BitFont.ttf");
+        let factory = window.factory.clone();
+        let mut glyphs = Glyphs::new(font, factory, TextureSettings::new()).unwrap();
+
         Window {
             width: _width,
             height: _height,
-            pwindow: WindowSettings::new("Tetris", (_width, _height))
-                .exit_on_esc(true)
-                .opengl(opengl)
-                .build()
-                .unwrap(),
+            pwindow: window,
+            glyphs: glyphs,
         }
     }
 
-    fn update(&mut self, ecs: &ECS) {
-        if let Some(e) = self.pwindow.next() {
+    fn start(&mut self, em: &mut Entity_Manager) {
+        while let Some(e) = self.pwindow.next() {
+            let glyphs: &mut Glyphs = &mut self.glyphs;
             if let Some(r_a) = e.render_args() {
                 self.pwindow.draw_2d(&e, |c, g| {
                     clear(BACKGROUND_C, g);
 
-                    ecs.draw(&c, &g);
+                    em.draw(&c, g, glyphs);
                 });
             }
             if let Some(u_a) = e.update_args() {
-                ecs.update(u_a.dt);
+                em.update(u_a.dt, );
             }
         }
     }
@@ -62,28 +108,65 @@ impl Window {
 // ENTITY_COMPONENT_SYSTEM
 //---------------------------------------
 
-struct ECS {
+struct Entity_Manager {
+    fps_view: FPS_View,
 }
 
-impl ECS {
+impl Entity_Manager {
 
-    fn new() -> ECS {
-        ECS {
-            
+    fn new() -> Entity_Manager {
+        Entity_Manager {
+            fps_view: FPS_View::new(),
         }
     }
 
-    fn draw(&self, c: &impl Transformed, g: &impl Graphics) {
+    fn draw(&mut self, c: &Context, g: &mut G2d, glyphs: &mut Glyphs) {
+
+        let bound = Rec::new(Vec2::new(0,0), Vec2::new(WINDOW_WIDTH, WINDOW_HEIGHT));
+
+        self.fps_view.draw(c, g, glyphs, &bound);
     }
 
-    fn update(&self, dt: f64) {
-        println!("updating ecs: {}", dt);
+    fn update(&mut self, dt: f64) {
+
+        self.fps_view.update(dt);
     }
 }
 
 //---------------------------------------
 // ENTITIES
 //---------------------------------------
+
+struct FPS_View {
+    fps: u32,
+    color: [f32; 4],
+}
+
+impl FPS_View {
+    fn new() -> FPS_View {
+        FPS_View {
+            fps: 0,
+            color: [1.0, 0.0, 0.0, 1.0],
+        }
+    }
+
+    fn update(&mut self, dt: f64) {
+        self.fps = (1.0 / dt) as u32;
+    }
+
+    fn draw(&mut self, c: &Context, g: &mut G2d, glyphs: &mut Glyphs, bound: &Rec){
+        let mut fps_str: String = "FPS: ".to_owned();
+        fps_str.push_str(&self.fps.to_string());
+        text::Text::new_color(self.color, 10).draw(
+            &fps_str,
+            glyphs,
+            &c.draw_state,
+            c.transform.trans(10.0,20.0), g
+        );
+    }
+
+}
+
 struct Field {
     x: u32,
     y: u32,
@@ -134,9 +217,7 @@ fn main() {
 
     let mut window = Window::new(WINDOW_WIDTH, WINDOW_HEIGHT);
 
-    let ecs = ECS::new();
+    let mut em = Entity_Manager::new();
 
-    loop {
-        window.update(&ecs);
-    }
+    window.start(&mut em);
 }
