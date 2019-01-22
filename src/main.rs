@@ -110,6 +110,7 @@ impl Window {
 
 struct Entity_Manager {
     fps_view: FPS_View,
+    field: Field,
 }
 
 impl Entity_Manager {
@@ -117,25 +118,34 @@ impl Entity_Manager {
     fn new() -> Entity_Manager {
         Entity_Manager {
             fps_view: FPS_View::new(),
+            field: Field::new(),
         }
     }
 
-    fn draw(&mut self, c: &Context, g: &mut G2d, glyphs: &mut Glyphs) {
-
+    fn draw(&self, c: &Context, g: &mut G2d, glyphs: &mut Glyphs) {
         let bound = Rec::new(Vec2::new(0,0), Vec2::new(WINDOW_WIDTH, WINDOW_HEIGHT));
 
+        self.field.draw(c, g, glyphs, &bound);
         self.fps_view.draw(c, g, glyphs, &bound);
     }
 
     fn update(&mut self, dt: f64) {
+        self.field.update(dt);
 
         self.fps_view.update(dt);
     }
 }
 
+trait Entity {
+    fn draw(&self, c: &Context, g:&mut G2d, glyphs: &mut Glyphs, bound: &Rec);
+    fn update(&mut self, dt: f64);
+}
+
 //---------------------------------------
 // ENTITIES
 //---------------------------------------
+
+/* -- FPS_VIEW -- */
 
 struct FPS_View {
     fps: u32,
@@ -149,12 +159,15 @@ impl FPS_View {
             color: [1.0, 0.0, 0.0, 1.0],
         }
     }
+}
+
+impl Entity for FPS_View {
 
     fn update(&mut self, dt: f64) {
         self.fps = (1.0 / dt) as u32;
     }
 
-    fn draw(&mut self, c: &Context, g: &mut G2d, glyphs: &mut Glyphs, bound: &Rec){
+    fn draw(&self, c: &Context, g: &mut G2d, glyphs: &mut Glyphs, bound: &Rec){
         let mut fps_str: String = "FPS: ".to_owned();
         fps_str.push_str(&self.fps.to_string());
         text::Text::new_color(self.color, 10).draw(
@@ -167,6 +180,8 @@ impl FPS_View {
 
 }
 
+/* -- FIELD -- */
+
 struct Field {
     x: u32,
     y: u32,
@@ -174,6 +189,10 @@ struct Field {
     width: u32,
     height: u32,
     grid: [u8; (GRID_WIDTH * GRID_HEIGHT) as usize],
+
+    move_time: f64,
+    delta_move_time: f64,
+    moves: u32,
 }
 
 impl Field {
@@ -184,30 +203,50 @@ impl Field {
             width: FIELD_WIDTH,
             height: FIELD_HEIGHT,
             grid: [0; (GRID_WIDTH * GRID_HEIGHT) as usize],
+
+            move_time: 1.0,
+            delta_move_time: 0.0,
+            
+            moves: 0,
         }
     }
-    
-    fn draw(&self, t: [[f64; 3]; 2], g: &mut impl Graphics) {
+}
+
+impl Entity for Field {
+
+    fn draw(&self, c: &Context, g: &mut G2d, glyphs: &mut Glyphs, bound: &Rec){
         let size : u32 = FIELD_WIDTH/GRID_WIDTH;
         for x in 0..(GRID_WIDTH - 1) {
             for y in 0..(GRID_HEIGHT - 1) {
                 let pos = (x + y * GRID_WIDTH) as usize;
                 if self.grid[pos] == 1 {
-                    rectangle([1.0, 0.0, 0.0, 1.0],
+                    rectangle([0.0, 1.0, 0.0, 1.0],
                               [(self.x + x * GRID_WIDTH) as f64,
                                (self.y + y * GRID_WIDTH) as f64,
                                GRID_WIDTH as f64,
                                GRID_WIDTH as f64],
-                              t, g);
+                              c.transform, g);
                 } else if self.grid[pos] == 0 {
                     rectangle([1.0, 0.0, 0.0, 1.0],
                               [(self.x + x * GRID_WIDTH) as f64,
                                (self.y + y * GRID_WIDTH) as f64,
                                GRID_WIDTH as f64,
                                GRID_WIDTH as f64],
-                              t, g);
+                              c.transform, g);
                 }
             }
+        }
+    }
+
+    fn update(&mut self, dt: f64) {
+        self.delta_move_time += dt;
+        if(self.delta_move_time >= self.move_time) {
+            self.delta_move_time -= self.move_time;
+            //do move
+            println!("move");
+            self.grid[(self.moves % (GRID_WIDTH * GRID_HEIGHT)) as usize] = 1;
+                
+            self.moves += 1;
         }
     }
 }
